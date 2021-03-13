@@ -1,99 +1,80 @@
 use std::error::Error;
 use std::fs;
-use std::env;
+use std::path::Path;
 
 pub struct Config {
     pub query: String,
-    pub filename: String,
-    pub case_sensitive: bool
+    pub directory: String,
+    pub case_insensitive: bool,
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {
+    pub fn new(args: &[String]) -> Result<Config, &str> {
+        if args.len() == 1 {
             return Err("not enough arguments");
         }
 
-        let query = args[1].clone();
-        let filename = args[2].clone();
-        let case_sensitive = env::var("CASE_INSENSITIVE").is_err();
+        let mut count: usize = 0;
+        let mut case_insensitive = false;
+        let mut query: String = String::new();
+        let mut directory: String = String::new();
 
-        Ok(Config { query, filename, case_sensitive })
-    }
-}
+        loop {
+            count += 1;
+            if count >= args.len() {
+                break;
+            }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(config.filename)?;
+            let val: &str = args[count].as_str();
 
-    let results = if config.case_sensitive {
-        search(&config.query, &contents)
-    } else {
-        search_case_insensitive(&config.query, &contents)
-    };
-
-    for line in results {
-        println!("{}", line);
-    }
-
-    Ok(())
-}
-
-pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    let mut results = Vec::new();
-
-    for line in contents.lines() {
-        if line.contains(query) {
-            results.push(line);
+            if val.contains('-') {
+                match val {
+                    "-d" | "--directory" => {
+                        count += 1;
+                        directory = args[count].clone();
+                    }
+                    "-q" | "--query" => {
+                        count += 1;
+                        query = args[count].clone();
+                    }
+                    "-i" | "--case-insensitive" => {
+                        case_insensitive = true;
+                    }
+                    _ => println!("ab"),
+                }
+            }
         }
+
+        Ok(Config {
+            query,
+            directory,
+            case_insensitive,
+        })
     }
 
-    results
-}
+    pub fn search(
+        dir: &Path,
+        query: &str,
+        case_insensitive: bool,
+        cb: &dyn Fn(&str),
+    ) -> Result<(), Box<dyn Error>> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path_buf = entry.path();
+            let path = path_buf.as_path().to_str().unwrap_or_else(|| "");
 
-pub fn search_case_insensitive<'a>(
-    query: &str,
-    contents: &'a str,
-) -> Vec<&'a str> {
-    let query = query.to_lowercase();
-    let mut results = Vec::new();
+            if !query.is_empty() {
+                if case_insensitive && path.to_lowercase().contains(query) {
+                    cb(path);
+                } else if path.contains(query) {
+                    cb(path);
+                }
+            }
 
-    for line in contents.lines() {
-        if line.to_lowercase().contains(&query) {
-            results.push(line);
+            if path_buf.is_dir() {
+                Config::search(&path_buf.as_path(), query, case_insensitive, cb)?;
+            }
         }
-    }
-
-    results
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn case_sensitive() {
-        let query = "duct";
-        let contents = "\
-Rust:
-safe, fast, productive.
-Pick three.
-Duct tape.";
-
-        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
-    }
-
-    #[test]
-    fn case_insensitive() {
-        let query = "rUsT";
-        let contents = "\
-Rust:
-safe, fast, productive.
-Pick three.
-Trust me.";
-
-        assert_eq!(
-            vec!["Rust:", "Trust me."],
-            search_case_insensitive(query, contents)
-        );
+        Ok(())
     }
 }
