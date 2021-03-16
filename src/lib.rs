@@ -2,6 +2,63 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
+struct Search {
+    pub query: String,
+    pub directory: String,
+    pub case_insensitive: bool,
+}
+
+trait Command {
+    fn new(args: &[String]) -> Self;
+    fn run(&self);
+}
+
+impl Command for Search {
+    fn new(args: &[String]) -> Search
+    {
+        let mut count: usize = 0;
+        let mut case_insensitive = false;
+        let mut query: String = String::new();
+        let mut directory: String = String::new();
+
+        loop {
+            count += 1;
+            if count >= args.len() {
+                break;
+            }
+
+            let val: &str = args[count].as_str();
+
+            if val.contains('-') {
+                match val {
+                    "-d" | "--directory" => {
+                        count += 1;
+                        directory = args[count].clone();
+                    }
+                    "-q" | "--query" => {
+                        count += 1;
+                        query = args[count].clone();
+                    }
+                    "-i" | "--case-insensitive" => {
+                        case_insensitive = true;
+                    }
+                    _ => println!("ab"),
+                }
+            }
+        }
+    
+        Search {
+            query,
+            directory,
+            case_insensitive,
+        }
+    }
+        
+    fn run(&self) {
+       
+    }
+}
+
 pub struct Config {
     pub query: String,
     pub directory: String,
